@@ -1,7 +1,4 @@
-use std::{
-    str::{from_utf8, from_utf8_unchecked},
-    time::Duration,
-};
+use std::time::Duration;
 
 use rppal::pwm::{self, Pwm};
 
@@ -58,7 +55,8 @@ impl PwmToneBuzzer {
             note2period("A5"),
             pwm::Polarity::Normal,
             false,
-        ).unwrap();
+        )
+        .unwrap();
 
         Ok(Self { pwm })
     }
