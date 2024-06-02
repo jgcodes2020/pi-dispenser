@@ -12,9 +12,10 @@ use counter::{Counter, CounterState};
 use eframe::{App, NativeOptions};
 use egui::{Align, Button, CentralPanel, Key, Layout, Ui, Vec2, ViewportBuilder, Widget};
 
-use crate::gpio::ServoSg90;
+use crate::{gpio::ServoSg90, park_exact};
 
 mod counter;
+mod gpio_thread;
 
 #[derive(Default)]
 struct SharedState {
@@ -95,22 +96,7 @@ fn run_gpio_thread(state: Arc<SharedState>, egui_ctx: egui::Context) {
     }
 }
 
-/// Parks the thread for a specified duration, unless a condition becomes true.
-/// Returns true if interrupted, false otherwise.
-fn park_exact(dur: Duration, cond: &mut impl FnMut() -> bool) -> bool {
-    let expect_end = Instant::now() + dur;
-    loop {
-        let now = Instant::now();
-        if now > expect_end {
-            return false;
-        } else {
-            thread::park_timeout(expect_end - now);
-        }
-        if cond() {
-            return true;
-        }
-    }
-}
+
 
 pub struct Application {
     // Counter states for GUI.
