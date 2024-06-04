@@ -61,7 +61,7 @@ const fn note2midi(name_str: &str) -> u32 {
 }
 
 #[inline(always)]
-pub fn buzzer_play_array(buzzer: &mut PwmToneBuzzer, bpm: f64, data: &[(u32, f64)], cancel: &mut impl FnMut() -> bool) {
+pub fn buzzer_play_array(buzzer: &mut PwmToneBuzzer, bpm: f64, data: &[(u32, f64)], cancel: &mut impl FnMut() -> bool) -> bool {
     let beat_ns: f64 = 60_000_000_000f64 / bpm;
 
     for i in 0..data.len() {
@@ -70,14 +70,21 @@ pub fn buzzer_play_array(buzzer: &mut PwmToneBuzzer, bpm: f64, data: &[(u32, f64
         // if playing repeated note, stop a bit at the end to give pause before the next beat
         if i < (data.len() - 1) && data[i + 1].0 == note {
             buzzer.play_midi(note);
-            crate::park_exact(Duration::from_nanos((beat_ns * (len - 0.125)) as u64), cancel);
+            if crate::park_exact(Duration::from_nanos((beat_ns * (len - 0.125)) as u64), cancel) {
+                return true
+            }
             buzzer.stop();
-            crate::park_exact(Duration::from_nanos((beat_ns * 0.125) as u64), cancel);
+            if crate::park_exact(Duration::from_nanos((beat_ns * 0.125) as u64), cancel) {
+                return true
+            }
         }
         else {
             // otherwise just play the note in full
             buzzer.play_midi(note);
-            crate::park_exact(Duration::from_nanos((beat_ns * len) as u64), cancel);
+            if crate::park_exact(Duration::from_nanos((beat_ns * len) as u64), cancel) {
+                return true
+            }
         }
     }
+    false
 }

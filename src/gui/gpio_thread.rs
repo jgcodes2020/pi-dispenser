@@ -4,8 +4,6 @@ use crate::{gpio::ServoSg90, park_exact};
 
 use super::SharedState;
 
-
-
 pub(crate) fn run_gpio_thread(state: Arc<SharedState>, egui_ctx: egui::Context) {
     let mut next_order: Option<(u64, u64)>;
     let mut cur_exit: bool;

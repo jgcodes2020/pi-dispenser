@@ -27,6 +27,5 @@ pub(crate) fn park_exact(dur: Duration, cond: &mut impl FnMut() -> bool) -> bool
 }
 
 fn main() {
-    let mut buzzer = PwmToneBuzzer::new(18).unwrap();
-    buzzer_play_array(&mut buzzer, music::rick::BPM, &music::rick::DATA, &mut || false);
+    Application::run();
 }
