@@ -31,16 +31,21 @@ pub struct Application {
     // Counter states for GUI.
     cnt_red: CounterState,
     cnt_green: CounterState,
-    // Shared state between UI and GPIO threads.
+    // Shared state between UI, GPIO and music threads.
+    // Since the data isn't owned solely by the GUI, it needs to be reference-counted.
     shared_state: Arc<SharedState>,
-    // Handle to the other threads so it can be cleaned up.
+    // Handles to the other threads so they can be cleaned up properly.
     gpio_join_handle: Option<JoinHandle<()>>,
     music_join_handle: Option<JoinHandle<()>>,
 }
 
 impl Application {
+    /// Initializes the app. Requires an `egui` context to update the GUI from outside the GUI thread.
     pub fn new(egui_ctx: &egui::Context) -> Self {
+        // Allocate the shared state on the heap; reference-counted to share between threads.
         let shared_state = Arc::<SharedState>::default();
+        
+        // Share the shared-state object and GUI handle to the two threads and start them.
         let gpio_thread = {
             let shared_state = Arc::clone(&shared_state);
             let egui_ctx = egui_ctx.clone();
@@ -52,6 +57,7 @@ impl Application {
             thread::spawn(move || run_music_thread(shared_state, egui_ctx))
         };
 
+        // Store all state in the Application struct
         Self {
             cnt_red: Default::default(),
             cnt_green: Default::default(),
@@ -63,6 +69,7 @@ impl Application {
 }
 
 impl Drop for Application {
+    // This function is run when Rust cleans up the application.
     fn drop(&mut self) {
         let gpio_join_handle = self.gpio_join_handle.take().unwrap();
         let gpio_thread = gpio_join_handle.thread();
@@ -73,7 +80,7 @@ impl Drop for Application {
         // set the exit flag
         self.shared_state.exit_flag.store(true, Ordering::SeqCst);
 
-        // interrupt both background threads
+        // interrupt both background threads to let them know to exit
         gpio_thread.unpark();
         music_thread.unpark();
         
@@ -92,20 +99,20 @@ impl App for Application {
                 ui.available_size(),
                 Layout::top_down(Align::Center),
                 |ui| {
-                    // arrange counters in a row
+                    // arrange the counters in a row
                     ui.allocate_ui_with_layout(
                         Vec2::new(200.0, 150.0),
                         Layout::left_to_right(Align::Center),
                         |ui| {
-                            ui.add(
+                            ui.add_enabled(
+                                can_enable,
                                 Counter::new(&mut self.cnt_red)
-                                    .with_header("RED")
-                                    .with_enabled(can_enable),
+                                    .with_header("RED"),
                             );
-                            ui.add(
+                            ui.add_enabled(
+                                can_enable,
                                 Counter::new(&mut self.cnt_green)
-                                    .with_header("GREEN")
-                                    .with_enabled(can_enable),
+                                    .with_header("GREEN"),
                             );
                         },
                     );
@@ -117,11 +124,12 @@ impl App for Application {
                         )
                         .clicked()
                     {
+                        // When the start button is pressed, send the current order to the GPIO thread to be handled.
                         {
                             let mut order = self.shared_state.next_order.lock().unwrap();
                             *order = Some((self.cnt_red.count(), self.cnt_green.count()));
                         }
-                        // notify the GPIO thread that we pressed Start
+                        // Notify the GPIO thread that we can start.
                         self.gpio_join_handle.as_ref().unwrap().thread().unpark();
                     }
                     // quit button
@@ -136,7 +144,12 @@ impl App for Application {
 
 impl Application {
     pub fn run() {
+        // This identifies the app on Wayland. I've used Java package naming to make it more unique.
+        // If I install a .desktop file in ~/.local/share/applications named "io.github.jgcodes2020.dispenser.desktop", it would
+        // use an icon from there. (Yes, Wayland doesn't simply let you set an icon because it likes to be special).
         const APP_ID: &str = "io.github.jgcodes2020.dispenser";
+
+        // These are the options that are set on the display. For now, all this does is make sure it runs fullscreen.
         let opts = NativeOptions {
             viewport: ViewportBuilder::default()
                 .with_resizable(false)
@@ -147,6 +160,7 @@ impl Application {
             ..Default::default()
         };
 
+        // Run the app, passing the egui context to Application.
         eframe::run_native(
             APP_ID,
             opts,

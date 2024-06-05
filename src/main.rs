@@ -9,6 +9,9 @@ mod gui;
 mod pwm;
 mod music;
 
+// NOTE BELOW: In Rust, threads can be "parked", or put to sleep in a way that allows them to be interrupted.
+// Interrupting a thread is done by calling Thread::unpark(). If a thread is unparked without already being parked, the next park will immediately end.
+
 /// Parks the thread for a specified duration, unless a condition becomes true.
 /// Returns true if interrupted, false otherwise.
 pub(crate) fn park_exact(dur: Duration, cond: &mut impl FnMut() -> bool) -> bool {

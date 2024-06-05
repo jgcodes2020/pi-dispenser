@@ -35,6 +35,7 @@ impl PwmToneBuzzer {
             self.stop();
             return
         }
+        // this optimized formula converts a MIDI note to a frequency.
         let freq = (midi as f64 / 12.0).exp2() * 8.175_798_915_643_707_33;
         self.pwm.set_frequency(freq, 0.25).unwrap();
         self.pwm.enable().unwrap();

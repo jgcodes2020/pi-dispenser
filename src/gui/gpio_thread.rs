@@ -42,7 +42,8 @@ pub(crate) fn run_gpio_thread(state: Arc<SharedState>, egui_ctx: egui::Context) 
         
 
         'exec: {
-            // this is our equivalent of arduino delay, but it can be interrupted
+            // This works a lot like thread::sleep, but it can be interrupted from the outside.
+            // This allows us to easily close the appplication.
             macro_rules! delay {
                 ($dur:expr) => {
                     if park_exact(Duration::from_millis($dur), &mut wait_fn) {
