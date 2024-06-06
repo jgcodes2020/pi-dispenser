@@ -1,6 +1,7 @@
 use std::{thread, time::Duration};
 
 use crate::pwm::PwmToneBuzzer;
+use crate::wait_interruptible;
 
 pub mod rick;
 
@@ -66,9 +67,17 @@ const fn note2midi(name_str: &str) -> u32 {
 
 /// Plays music as defined by an array of pairs, each pair indicating note and duration.
 #[inline(always)]
-pub fn buzzer_play_array(buzzer: &mut PwmToneBuzzer, bpm: f64, data: &[(u32, f64)], cancel: &mut impl FnMut() -> bool) -> bool {
+pub fn buzzer_play_array(buzzer: &mut PwmToneBuzzer, bpm: f64, data: &[(u32, f64)], cancel: &impl Fn() -> bool) -> bool {
     // Compute the length of a beat in nanoseconds based on BPM.
     let beat_ns: f64 = 60_000_000_000f64 / bpm;
+
+    macro_rules! delay {
+        ($dur:expr) => {
+            if wait_interruptible($dur, cancel) {
+                return true;
+            }
+        };
+    }
 
     for i in 0..data.len() {
         let (note, len) = data[i];
@@ -77,20 +86,14 @@ pub fn buzzer_play_array(buzzer: &mut PwmToneBuzzer, bpm: f64, data: &[(u32, f64
         // I chose the arbitrary duration of 1/8th of a beat, or a 32nd note. This is short enough to not be too obvious but not long enough for it to be obvious either.
         if i < (data.len() - 1) && data[i + 1].0 == note {
             buzzer.play_midi(note);
-            if crate::park_exact(Duration::from_nanos((beat_ns * (len - 0.125)) as u64), cancel) {
-                return true
-            }
+            delay!(Duration::from_nanos((beat_ns * (len - 0.125)) as u64));
             buzzer.stop();
-            if crate::park_exact(Duration::from_nanos((beat_ns * 0.125) as u64), cancel) {
-                return true
-            }
+            delay!(Duration::from_nanos((beat_ns * (len - 0.125)) as u64));
         }
         else {
             // otherwise just play the note for its full duration.
             buzzer.play_midi(note);
-            if crate::park_exact(Duration::from_nanos((beat_ns * len) as u64), cancel) {
-                return true
-            }
+            delay!(Duration::from_nanos((beat_ns * len) as u64));
         }
     }
     false

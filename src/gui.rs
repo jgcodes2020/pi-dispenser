@@ -14,7 +14,7 @@ use egui::{Align, Button, CentralPanel, Key, Layout, Ui, Vec2, ViewportBuilder, 
 use gpio_thread::run_gpio_thread;
 use music_thread::run_music_thread;
 
-use crate::{gpio::ServoSg90, park_exact};
+use crate::{gpio::ServoSg90, wait_interruptible};
 
 mod counter;
 mod gpio_thread;
@@ -23,6 +23,7 @@ mod music_thread;
 #[derive(Default)]
 struct SharedState {
     exit_flag: AtomicBool,
+    pause_flag: AtomicBool,
     is_processing: AtomicBool,
     next_order: Mutex<Option<(u64, u64)>>,
 }
@@ -44,7 +45,7 @@ impl Application {
     pub fn new(egui_ctx: &egui::Context) -> Self {
         // Allocate the shared state on the heap; reference-counted to share between threads.
         let shared_state = Arc::<SharedState>::default();
-        
+
         // Share the shared-state object and GUI handle to the two threads and start them.
         let gpio_thread = {
             let shared_state = Arc::clone(&shared_state);
@@ -63,8 +64,15 @@ impl Application {
             cnt_green: Default::default(),
             shared_state: shared_state,
             gpio_join_handle: Some(gpio_thread),
-            music_join_handle: Some(music_thread)
+            music_join_handle: Some(music_thread),
         }
+    }
+
+    fn start_order(&self) {
+        let mut order = self.shared_state.next_order.lock().unwrap();
+        *order = Some((self.cnt_red.count(), self.cnt_green.count()));
+        // Notify the GPIO thread that we can start.
+        self.gpio_join_handle.as_ref().unwrap().thread().unpark();
     }
 }
 
@@ -73,7 +81,7 @@ impl Drop for Application {
     fn drop(&mut self) {
         let gpio_join_handle = self.gpio_join_handle.take().unwrap();
         let gpio_thread = gpio_join_handle.thread();
-        
+
         let music_join_handle = self.music_join_handle.take().unwrap();
         let music_thread = music_join_handle.thread();
 
@@ -83,7 +91,7 @@ impl Drop for Application {
         // interrupt both background threads to let them know to exit
         gpio_thread.unpark();
         music_thread.unpark();
-        
+
         // join both threads
         gpio_join_handle.join().expect("GPIO join failed!");
         music_join_handle.join().expect("Music join failed!")
@@ -93,7 +101,7 @@ impl Drop for Application {
 impl App for Application {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         CentralPanel::default().show(ctx, |ui| {
-            let can_enable = !self.shared_state.is_processing.load(Ordering::SeqCst);
+            let is_processing = self.shared_state.is_processing.load(Ordering::SeqCst);
 
             ui.allocate_ui_with_layout(
                 ui.available_size(),
@@ -105,35 +113,45 @@ impl App for Application {
                         Layout::left_to_right(Align::Center),
                         |ui| {
                             ui.add_enabled(
-                                can_enable,
-                                Counter::new(&mut self.cnt_red)
-                                    .with_header("RED"),
+                                is_processing,
+                                Counter::new(&mut self.cnt_red).with_header("RED"),
                             );
                             ui.add_enabled(
-                                can_enable,
-                                Counter::new(&mut self.cnt_green)
-                                    .with_header("GREEN"),
+                                is_processing,
+                                Counter::new(&mut self.cnt_green).with_header("GREEN"),
                             );
                         },
                     );
                     // start button
                     if ui
                         .add_enabled(
-                            can_enable,
+                            !is_processing,
                             Button::new("START").min_size(Vec2::new(150.0, 0.0)),
                         )
                         .clicked()
                     {
-                        // When the start button is pressed, send the current order to the GPIO thread to be handled.
-                        {
-                            let mut order = self.shared_state.next_order.lock().unwrap();
-                            *order = Some((self.cnt_red.count(), self.cnt_green.count()));
+                        if !self.shared_state.is_processing.load(Ordering::SeqCst) {
+                            self.start_order();
                         }
-                        // Notify the GPIO thread that we can start.
-                        self.gpio_join_handle.as_ref().unwrap().thread().unpark();
+                    }
+                    // pause button
+                    if ui
+                        .add_enabled(
+                            is_processing,
+                            Button::new("START").min_size(Vec2::new(150.0, 0.0)),
+                        )
+                        .clicked()
+                    {
+                        if self.shared_state.is_processing.load(Ordering::SeqCst) {
+
+                        }
                     }
                     // quit button
-                    if ui.add(Button::new("QUIT").min_size(Vec2::new(150.0, 0.0))).clicked() {
+                    if ui
+                        .add(Button::new("STOP AND EXIT").min_size(Vec2::new(150.0, 0.0)))
+                        .clicked()
+                    {
+                        // This just straight-up closes the window, which triggers the code in `Drop`
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 },

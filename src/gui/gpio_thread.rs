@@ -1,6 +1,6 @@
 use std::{sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread, time::{Duration, Instant}};
 
-use crate::{gpio::ServoSg90, park_exact};
+use crate::{gpio::ServoSg90, wait_interruptible};
 
 use super::SharedState;
 
@@ -35,10 +35,7 @@ pub(crate) fn run_gpio_thread(state: Arc<SharedState>, egui_ctx: egui::Context) 
         println!("ORDER: {}, {}", red_count, green_count);
 
         // execute the order. Any sleep must be replaced with a park (so that it can be interrupted)
-        let mut wait_fn = || {
-            cur_exit = state.exit_flag.load(Ordering::SeqCst);
-            cur_exit
-        };
+        let mut wait_fn = || state.exit_flag.load(Ordering::SeqCst);
         
 
         'exec: {
@@ -46,7 +43,7 @@ pub(crate) fn run_gpio_thread(state: Arc<SharedState>, egui_ctx: egui::Context) 
             // This allows us to easily close the appplication.
             macro_rules! delay {
                 ($dur:expr) => {
-                    if park_exact(Duration::from_millis($dur), &mut wait_fn) {
+                    if wait_interruptible(Duration::from_millis($dur), &mut wait_fn) {
                         break 'exec;
                     }
                 };
