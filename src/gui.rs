@@ -24,6 +24,7 @@ mod music_thread;
 struct SharedState {
     exit_flag: AtomicBool,
     pause_flag: AtomicBool,
+    cancel_flag: AtomicBool,
     is_processing: AtomicBool,
     next_order: Mutex<Option<(u64, u64)>>,
 }
@@ -102,6 +103,7 @@ impl App for Application {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         CentralPanel::default().show(ctx, |ui| {
             let is_processing = self.shared_state.is_processing.load(Ordering::SeqCst);
+            let is_paused = self.shared_state.pause_flag.load(Ordering::SeqCst);
 
             ui.allocate_ui_with_layout(
                 ui.available_size(),
@@ -113,11 +115,11 @@ impl App for Application {
                         Layout::left_to_right(Align::Center),
                         |ui| {
                             ui.add_enabled(
-                                is_processing,
+                                !is_processing,
                                 Counter::new(&mut self.cnt_red).with_header("RED"),
                             );
                             ui.add_enabled(
-                                is_processing,
+                                !is_processing,
                                 Counter::new(&mut self.cnt_green).with_header("GREEN"),
                             );
                         },
@@ -138,17 +140,32 @@ impl App for Application {
                     if ui
                         .add_enabled(
                             is_processing,
-                            Button::new("START").min_size(Vec2::new(150.0, 0.0)),
+                            Button::new(if is_paused {"RESUME"} else {"PAUSE"}).min_size(Vec2::new(150.0, 0.0)),
                         )
                         .clicked()
                     {
                         if self.shared_state.is_processing.load(Ordering::SeqCst) {
-
+                            self.shared_state.pause_flag.fetch_xor(true, Ordering::SeqCst);
+                            self.gpio_join_handle.as_ref().unwrap().thread().unpark();
                         }
+                    }
+                    // stop immediately button
+                    if ui
+                        .add_enabled(
+                            is_processing,
+                            Button::new("CANCEL").min_size(Vec2::new(150.0, 0.0)),
+                        )
+                        .clicked()
+                    {
+                        if self.shared_state.is_processing.load(Ordering::SeqCst) {
+                            self.shared_state.cancel_flag.store(true, Ordering::SeqCst);
+                            self.gpio_join_handle.as_ref().unwrap().thread().unpark();
+                        }
+
                     }
                     // quit button
                     if ui
-                        .add(Button::new("STOP AND EXIT").min_size(Vec2::new(150.0, 0.0)))
+                        .add(Button::new("QUIT").min_size(Vec2::new(150.0, 0.0)))
                         .clicked()
                     {
                         // This just straight-up closes the window, which triggers the code in `Drop`

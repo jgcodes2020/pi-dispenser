@@ -1,6 +1,6 @@
 use std::{sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread, time::{Duration, Instant}};
 
-use crate::{gpio::ServoSg90, wait_interruptible};
+use crate::{gpio::ServoSg90, wait_interruptible, wait_pausable};
 
 use super::SharedState;
 
@@ -35,7 +35,8 @@ pub(crate) fn run_gpio_thread(state: Arc<SharedState>, egui_ctx: egui::Context) 
         println!("ORDER: {}, {}", red_count, green_count);
 
         // execute the order. Any sleep must be replaced with a park (so that it can be interrupted)
-        let mut wait_fn = || state.exit_flag.load(Ordering::SeqCst);
+        let wait_fn = || state.exit_flag.load(Ordering::SeqCst) || state.cancel_flag.load(Ordering::SeqCst);
+        let pause_fn = || state.pause_flag.load(Ordering::SeqCst);
         
 
         'exec: {
@@ -43,7 +44,15 @@ pub(crate) fn run_gpio_thread(state: Arc<SharedState>, egui_ctx: egui::Context) 
             // This allows us to easily close the appplication.
             macro_rules! delay {
                 ($dur:expr) => {
-                    if wait_interruptible(Duration::from_millis($dur), &mut wait_fn) {
+                    if wait_interruptible(Duration::from_millis($dur), &wait_fn) {
+                        break 'exec;
+                    }
+                };
+            }
+
+            macro_rules! delay_pause {
+                ($dur:expr) => {
+                    if wait_pausable(Duration::from_millis($dur), &wait_fn, &pause_fn) {
                         break 'exec;
                     }
                 };
@@ -53,13 +62,13 @@ pub(crate) fn run_gpio_thread(state: Arc<SharedState>, egui_ctx: egui::Context) 
                 servo_a.set_pos(1.0);
                 delay!(500);
                 servo_a.set_pos(0.0);
-                delay!(500);
+                delay_pause!(500);
             }
             for _ in 0..green_count {
                 servo_b.set_pos(1.0);
                 delay!(500);
                 servo_b.set_pos(0.0);
-                delay!(500);
+                delay_pause!(500);
             }
         }
         // reset the motors
@@ -70,6 +79,8 @@ pub(crate) fn run_gpio_thread(state: Arc<SharedState>, egui_ctx: egui::Context) 
         // signal that the order is over
         *state.next_order.lock().unwrap() = None;
         state.is_processing.store(false, Ordering::SeqCst);
+        state.cancel_flag.store(false, Ordering::SeqCst);
+        state.pause_flag.store(false, Ordering::SeqCst);
         egui_ctx.request_repaint();
     }
 }

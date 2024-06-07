@@ -88,7 +88,7 @@ pub fn buzzer_play_array(buzzer: &mut PwmToneBuzzer, bpm: f64, data: &[(u32, f64
             buzzer.play_midi(note);
             delay!(Duration::from_nanos((beat_ns * (len - 0.125)) as u64));
             buzzer.stop();
-            delay!(Duration::from_nanos((beat_ns * (len - 0.125)) as u64));
+            delay!(Duration::from_nanos((beat_ns * 0.125) as u64));
         }
         else {
             // otherwise just play the note for its full duration.
