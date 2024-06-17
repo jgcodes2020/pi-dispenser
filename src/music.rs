@@ -4,6 +4,7 @@ use crate::pwm::PwmToneBuzzer;
 use crate::wait_interruptible;
 
 pub mod rick;
+pub mod badapple;
 
 
 const fn note2midi(name_str: &str) -> u32 {

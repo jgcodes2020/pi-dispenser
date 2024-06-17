@@ -1,5 +1,6 @@
-use std::{thread, time::{Duration, Instant}};
+use std::{io, thread, time::{Duration, Instant}};
 
+use gpio::ServoSg90;
 use gui::Application;
 use music::buzzer_play_array;
 use pwm::PwmToneBuzzer;
@@ -52,5 +53,19 @@ pub(crate) fn wait_pausable(dur: Duration, cond: &impl Fn() -> bool, pause_cond:
 }
 
 fn main() {
+    // let mut servo = ServoSg90::new(27, 0.0).unwrap();
+    // let mut line: String = String::new();
+    // let mut up = false;
+    // loop {
+    //     io::stdin().read_line(&mut line);
+    //     up = !up;
+    //     if up {
+    //         servo.set_pos(1.0);
+    //     }
+    //     else {
+    //         servo.set_pos(0.0);
+    //     }
+    // }
+
     Application::run();
 }
