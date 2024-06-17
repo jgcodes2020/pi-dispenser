@@ -1,3 +1,13 @@
+/*
+gui/counter.rs
+Language: Rust 1.78.0
+Author: Jacky Guo
+Date: Jun. 17, 2024
+*/
+
+//! Implementation of the counter on the GUI.
+
+
 use egui::{Align, Button, Layout, TextEdit, Ui, Vec2, Widget};
 
 /// State associated with a counter widget.
@@ -35,6 +45,7 @@ pub struct Counter<'a, 'b> {
 }
 
 impl<'a, 'b> Counter<'a, 'b> {
+    /// Creates a counter based on the provided state.
     pub fn new(state: &'a mut CounterState) -> Self {
         Self {
             state: state,
@@ -42,6 +53,7 @@ impl<'a, 'b> Counter<'a, 'b> {
         }
     }
 
+    /// Adds a header to this counter.
     pub fn with_header(self, header: &'b str) -> Self {
         Self {
             header: Some(header),

@@ -1,4 +1,14 @@
-use std::{thread, time::Duration};
+/*
+music.rs
+Language: Rust 1.78.0
+Author: Jacky Guo
+Date: Jun. 17, 2024
+*/
+
+//! Contains utilities for programming and playing music 
+//! on buzzers via the Pi's PWM channels.
+
+use std::{time::Duration};
 
 use crate::pwm::PwmToneBuzzer;
 use crate::wait_interruptible;
@@ -6,8 +16,24 @@ use crate::wait_interruptible;
 pub mod rick;
 pub mod badapple;
 
-
-const fn note2midi(name_str: &str) -> u32 {
+/// Converts a note name to its MIDI value.
+/// 
+/// ## Format
+/// Note names must be written in the format:
+/// ```text
+/// <letter>[accidental]<octave>
+/// ```
+/// Note names are the capital letters A through G. Accidentals
+/// are optional, and they can either be `#` (sharp) or `b` (flat).
+/// Octave numbers must be non-negative; note that C4 = middle C.
+/// 
+/// As an example, some valid note names include:
+/// ```text
+/// C4
+/// Bb3
+/// F#6
+/// ```
+pub(crate) const fn note2midi(name_str: &str) -> u32 {
     if !name_str.is_ascii() {
         panic!("note names must be ASCII");
     }
@@ -66,12 +92,27 @@ const fn note2midi(name_str: &str) -> u32 {
     midi
 }
 
-/// Plays music as defined by an array of pairs, each pair indicating note and duration.
+/// Plays music as defined by an array of pairs, each pair indicating note and duration.  
+/// Returns true if the music was interrupted, or false if it played through to the end.
+/// 
+/// ## Parameters
+/// 
+/// - `buzzer``: the buzzer to play music on
+/// - `bpm`: The tempo of the music, in BPM. 120 BPM corresponds to a beat every 0.5 seconds.
+/// - `data`: A data array containing the actual music. See section "Data Format" for details.
+/// - `cancel`: A function which can determine if an interrupt happens; allowing the music to be stopped whenever.
+/// 
+/// ## Data Format
+/// Data is stored as a list of pairs. The first element of each pair is the MIDI index of the note being played,
+/// and the second element is its length, in beats. As an example: `(60, 1.0)` is middle C played for the length
+/// of a quarter note.
+/// 
 #[inline(always)]
 pub fn buzzer_play_array(buzzer: &mut PwmToneBuzzer, bpm: f64, data: &[(u32, f64)], cancel: &impl Fn() -> bool) -> bool {
     // Compute the length of a beat in nanoseconds based on BPM.
     let beat_ns: f64 = 60_000_000_000f64 / bpm;
 
+    // Macro for later: wait, if interrupted return true.
     macro_rules! delay {
         ($dur:expr) => {
             if wait_interruptible($dur, cancel) {

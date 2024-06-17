@@ -1,9 +1,22 @@
+/*
+gui/gpio_thread.rs
+Language: Rust 1.78.0
+Author: Jacky Guo
+Date: Jun. 17, 2024
+*/
+
+//! Implementation of the GPIO thread, which controls the servos and dispatches orders.
+
 use std::{sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread, time::{Duration, Instant}};
 
 use crate::{gpio::ServoSg90, wait_interruptible, wait_pausable};
 
 use super::SharedState;
 
+/// Function for the GPIO thread, which controls the servos and dispatches orders.
+/// ## Parameters
+/// - `state`: Shared state from the GUI.
+/// - `egui_ctx`: GUI context, also obtained from the GUI.
 pub(crate) fn run_gpio_thread(state: Arc<SharedState>, egui_ctx: egui::Context) {
     let mut next_order: Option<(u64, u64)>;
     let mut cur_exit: bool;
@@ -49,7 +62,7 @@ pub(crate) fn run_gpio_thread(state: Arc<SharedState>, egui_ctx: egui::Context) 
                     }
                 };
             }
-
+            // This is basically the delay macro, but it can be paused.
             macro_rules! delay_pause {
                 ($dur:expr) => {
                     if wait_pausable(Duration::from_millis($dur), &wait_fn, &pause_fn) {

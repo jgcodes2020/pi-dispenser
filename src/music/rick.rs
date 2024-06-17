@@ -1,3 +1,12 @@
+/*
+music/rick.rs
+Language: Rust 1.78.0
+Author: Jacky Guo
+Date: Jun. 17, 2024
+*/
+
+//! Tempo and music data for _Never Gonna Give You Up_ by Rick Astley.
+
 use super::note2midi;
 
 pub const BPM: f64 = 113.0;

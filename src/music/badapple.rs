@@ -1,3 +1,13 @@
+/*
+music/badapple.rs
+Language: Rust 1.78.0
+Author: Jacky Guo
+Date: Jun. 17, 2024
+*/
+
+//! Tempo and music data for _Bad Apple!!_ ft. Nomico.
+
+
 use super::note2midi;
 
 pub const BPM: f64 = 138.0;

@@ -1,9 +1,16 @@
-use std::{io, thread, time::{Duration, Instant}};
+/*
+main.rs
+Language: Rust 1.78.0
+Author: Jacky Guo
+Date: Jun. 17, 2024
+*/
 
-use gpio::ServoSg90;
+//! Contains the main function, as well as a couple of nice functions for waiting
+//! with the possibility of an interrupt.
+
+use std::{thread, time::{Duration, Instant}};
+
 use gui::Application;
-use music::buzzer_play_array;
-use pwm::PwmToneBuzzer;
 
 mod gpio;
 mod gui;

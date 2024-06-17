@@ -1,34 +1,45 @@
+/*
+gui.rs
+Language: Rust 1.78.0
+Author: Jacky Guo
+Date: Jun. 17, 2024
+*/
+
+//! Implementation of the GUI for the app.
+
+
 use std::{
-    mem::MaybeUninit,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Condvar, Mutex, MutexGuard,
+        Arc, Mutex,
     },
-    thread::{self, JoinHandle, Thread},
-    time::{Duration, Instant},
+    thread::{self, JoinHandle},
 };
 
 use counter::{Counter, CounterState};
 use eframe::{App, NativeOptions};
-use egui::{Align, Button, CentralPanel, Key, Layout, Ui, Vec2, ViewportBuilder, Widget};
+use egui::{Align, Button, CentralPanel, Layout, Vec2, ViewportBuilder};
 use gpio_thread::run_gpio_thread;
 use music_thread::run_music_thread;
-
-use crate::{gpio::ServoSg90, wait_interruptible};
 
 mod counter;
 mod gpio_thread;
 mod music_thread;
 
+/// Shared state between the various threads in the application.
 #[derive(Default)]
 struct SharedState {
+    // Flags that signal exit, pause and cancel.
     exit_flag: AtomicBool,
     pause_flag: AtomicBool,
     cancel_flag: AtomicBool,
+    // Flag set by the GPIO thread: true when an order is active.
     is_processing: AtomicBool,
+    // The current order if one is being processed, or the next one if no order is being processed.
     next_order: Mutex<Option<(u64, u64)>>,
 }
 
+/// Primary state for the GUI.
 pub struct Application {
     // Counter states for GUI.
     cnt_red: CounterState,
@@ -69,6 +80,7 @@ impl Application {
         }
     }
 
+    /// Starts an order based on the current GUI state.
     fn start_order(&self) {
         let mut order = self.shared_state.next_order.lock().unwrap();
         *order = Some((self.cnt_red.count(), self.cnt_green.count()));
@@ -100,7 +112,7 @@ impl Drop for Application {
 }
 
 impl App for Application {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         CentralPanel::default().show(ctx, |ui| {
             let is_processing = self.shared_state.is_processing.load(Ordering::SeqCst);
             let is_paused = self.shared_state.pause_flag.load(Ordering::SeqCst);
@@ -132,11 +144,12 @@ impl App for Application {
                         )
                         .clicked()
                     {
+                        // start an order if one isn't already being processed
                         if !self.shared_state.is_processing.load(Ordering::SeqCst) {
                             self.start_order();
                         }
                     }
-                    // pause button
+                    // pause/resume button
                     if ui
                         .add_enabled(
                             is_processing,
@@ -144,6 +157,7 @@ impl App for Application {
                         )
                         .clicked()
                     {
+                        // pause or resume the order if one is currently being processed.
                         if self.shared_state.is_processing.load(Ordering::SeqCst) {
                             self.shared_state.pause_flag.fetch_xor(true, Ordering::SeqCst);
                             self.gpio_join_handle.as_ref().unwrap().thread().unpark();
@@ -157,6 +171,7 @@ impl App for Application {
                         )
                         .clicked()
                     {
+                        // cancel the order if one is being processed
                         if self.shared_state.is_processing.load(Ordering::SeqCst) {
                             self.shared_state.cancel_flag.store(true, Ordering::SeqCst);
                             self.gpio_join_handle.as_ref().unwrap().thread().unpark();
@@ -178,6 +193,7 @@ impl App for Application {
 }
 
 impl Application {
+    /// Runs the application GUI.
     pub fn run() {
         // This identifies the app on Wayland. I've used Java package naming to make it more unique.
         // If I install a .desktop file in ~/.local/share/applications named "io.github.jgcodes2020.dispenser.desktop", it would

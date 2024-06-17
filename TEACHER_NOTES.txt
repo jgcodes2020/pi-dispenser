@@ -1,0 +1,13 @@
+Notes for the teacher marking this
+==================================
+
+Rust has several quirks that make it different from most programming languages, thanks to its 
+emphasis on *correctness*. These include, but are not limited to:
+
+- Explicit error handling. For errors that can be recovered from, Rust returns a `Result` type, 
+  which contains either a valid value or an error.
+- Borrow checking. In Rust, each variable has a single *owner*, which is a variable, struct field, or
+  other container. To pass a value by reference, we have two methods: `&` (constant reference) and
+  `&mut` (mutable reference). Only one mutable reference OR any number of constantd references may
+  exist for a given variable. Mutable and immutable references cannot coexist, if you try that that,
+  the compiler will complain.
